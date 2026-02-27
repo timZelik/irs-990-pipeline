@@ -17,12 +17,20 @@ def get_db_connection():
             return psycopg2.connect(conn_str)
         except socket.gaierror:
             # Fallback: try with direct IPv6 IP using proper format
-            # Format: postgresql://user:pass@[IPv6]:port/db?sslmode=require
             parsed = urllib.parse.urlparse(conn_str)
             ipv6_host = "2600:1f16:1cd0:3330:672f:5e91:d513:a63b"
             new_host = f"[{ipv6_host}]:{parsed.port or 5432}"
             new_conn = f"postgresql://{parsed.username}:{parsed.password}@{new_host}/{parsed.path.lstrip('/')}?sslmode=require"
             return psycopg2.connect(new_conn)
+        except Exception as e:
+            if "Cannot assign requested address" in str(e):
+                # Try direct IPv6 IP
+                parsed = urllib.parse.urlparse(conn_str)
+                ipv6_host = "2600:1f16:1cd0:3330:672f:5e91:d513:a63b"
+                new_host = f"[{ipv6_host}]:{parsed.port or 5432}"
+                new_conn = f"postgresql://{parsed.username}:{parsed.password}@{new_host}/{parsed.path.lstrip('/')}?sslmode=require"
+                return psycopg2.connect(new_conn)
+            raise
     except Exception as e:
         st.error(f"Database connection error: {e}")
         return None
