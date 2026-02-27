@@ -77,39 +77,39 @@ def load_summary_data():
     
     query = """
         SELECT 
-            o.LegalName as OrgName,
-            o.EIN,
-            o.State,
-            o.City,
-            o.NTEECode,
-            o.Phone,
-            o.PrincipalOfficer,
-            f.TotalAssetsEOY,
-            f.TotalRevenueCY,
-            f.TotalExpensesCY,
-            f.NetAssetsEOY,
-            f.ProgramExpensesAmt,
-            f.FundraisingExpensesCY,
-            f.ContributionsCY,
-            f.SurplusDeficitCY,
-            d.RevenueGrowthYoY,
-            d.ProgramExpenseRatio,
-            d.AdminExpenseRatio,
-            d.FundraisingExpenseRatio,
-            d.ExecCompPercentOfRevenue,
-            d.LiabilityToAssetRatio,
-            d.ContributionDependencyPct,
-            d.SurplusTrend,
-            d.LeadScore,
-            f.TaxYear,
-            p.ContactStatus,
-            p.IsWatchlisted
+            o."legalname" as "OrgName",
+            o."ein" as "EIN",
+            o."state" as "State",
+            o."city" as "City",
+            o."nteecode" as "NTEECode",
+            o."phone" as "Phone",
+            o."principalofficer" as "PrincipalOfficer",
+            f."totalassetseoy" as "TotalAssetsEOY",
+            f."totalrevenuecy" as "TotalRevenueCY",
+            f."totalexpensescy" as "TotalExpensesCY",
+            f."netassetseoy" as "NetAssetsEOY",
+            f."programexpensesamt" as "ProgramExpensesAmt",
+            f."fundraisingexpensescy" as "FundraisingExpensesCY",
+            f."contributionscy" as "ContributionsCY",
+            f."surplusdeficitcy" as "SurplusDeficitCY",
+            d."revenuegrowthyoy" as "RevenueGrowthYoY",
+            d."programexpenseratio" as "ProgramExpenseRatio",
+            d."adminexpenseratio" as "AdminExpenseRatio",
+            d."fundraisingexpenseratio" as "FundraisingExpenseRatio",
+            d."execcomppercentofrevenue" as "ExecCompPercentOfRevenue",
+            d."liabilitytoassetratio" as "LiabilityToAssetRatio",
+            d."contributiondependencypct" as "ContributionDependencyPct",
+            d."surplustrend" as "SurplusTrend",
+            d."leadscore" as "LeadScore",
+            f."taxyear" as "TaxYear",
+            p."contactstatus" as "ContactStatus",
+            p."iswatchlisted" as "IsWatchlisted"
         FROM organizations o
-        LEFT JOIN filings f ON o.EIN = f.EIN
-        LEFT JOIN derived_metrics d ON o.EIN = d.EIN AND f.TaxYear = d.TaxYear
-        LEFT JOIN prospect_activity p ON o.EIN = p.EIN
-        WHERE o.State IN ('FL', 'NY')
-        ORDER BY d.LeadScore DESC
+        LEFT JOIN filings f ON o."ein" = f."ein"
+        LEFT JOIN derived_metrics d ON o."ein" = d."ein" AND f."taxyear" = d."taxyear"
+        LEFT JOIN prospect_activity p ON o."ein" = p."ein"
+        WHERE o."state" IN ('FL', 'NY')
+        ORDER BY d."leadscore" DESC
     """
     
     df = pd.read_sql_query(query, conn)
@@ -124,26 +124,26 @@ def load_org_details(ein):
     
     filings_query = """
         SELECT * FROM filings 
-        WHERE EIN = %s 
-        ORDER BY TaxYear DESC
+        WHERE "ein" = %s 
+        ORDER BY "taxyear" DESC
     """
     filings_df = pd.read_sql_query(filings_query, conn, params=[ein])
     
     metrics_query = """
         SELECT * FROM derived_metrics 
-        WHERE EIN = %s 
-        ORDER BY TaxYear DESC
+        WHERE "ein" = %s 
+        ORDER BY "taxyear" DESC
     """
     metrics_df = pd.read_sql_query(metrics_query, conn, params=[ein])
     
     exec_query = """
         SELECT * FROM executive_compensation 
-        WHERE EIN = %s 
-        ORDER BY TaxYear DESC
+        WHERE "ein" = %s 
+        ORDER BY "taxyear" DESC
     """
     exec_df = pd.read_sql_query(exec_query, conn, params=[ein])
     
-    prospect_query = "SELECT * FROM prospect_activity WHERE EIN = %s"
+    prospect_query = 'SELECT * FROM prospect_activity WHERE "ein" = %s'
     prospect_df = pd.read_sql_query(prospect_query, conn, params=[ein])
     
     conn.close()
@@ -155,13 +155,13 @@ def save_prospect_activity(ein, contact_status, is_watchlisted, notes):
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO prospect_activity 
-        (EIN, ContactStatus, IsWatchlisted, PrivateNotes, UpdatedAt)
+        ("ein", "contactstatus", "iswatchlisted", "privatenotes", "updatedat")
         VALUES (%s, %s, %s, %s, NOW())
-        ON CONFLICT (EIN) DO UPDATE SET
-        ContactStatus = EXCLUDED.ContactStatus,
-        IsWatchlisted = EXCLUDED.IsWatchlisted,
-        PrivateNotes = EXCLUDED.PrivateNotes,
-        UpdatedAt = EXCLUDED.UpdatedAt
+        ON CONFLICT ("ein") DO UPDATE SET
+        "contactstatus" = EXCLUDED."contactstatus",
+        "iswatchlisted" = EXCLUDED."iswatchlisted",
+        "privatenotes" = EXCLUDED."privatenotes",
+        "updatedat" = EXCLUDED."updatedat"
     """, (ein, contact_status, 1 if is_watchlisted else 0, notes))
     conn.commit()
     conn.close()
@@ -230,6 +230,16 @@ def show_dashboard():
         
         if df.empty:
             st.warning("No data available. Please run the data pipeline first.")
+            return
+        
+        required_cols = ['EIN', 'OrgName', 'TaxYear']
+        missing_cols = [c for c in required_cols if c not in df.columns]
+        if missing_cols:
+            st.warning(f"Missing columns in data: {missing_cols}. Please run the data pipeline.")
+            return
+        
+        if df['TaxYear'].isna().all():
+            st.warning("No filing data available. Please run the data pipeline first.")
             return
         
         if 'ContactStatus' in df.columns:
