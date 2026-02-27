@@ -57,6 +57,16 @@ def parse_xml_file(filepath):
     filing_data['TaxYear'] = parse_int(get_text(root, './/efile:TaxYr'))
     filing_data['TaxPeriodEndDate'] = get_text_or_none(root, './/efile:TaxPeriodEndDt')
     
+    filing_data['NTEECode'] = get_text_or_none(root, './/efile:Filer/efile:NTEECd')
+    
+    phones = root.xpath('.//efile:PhoneNum', namespaces=NS)
+    if phones:
+        filing_data['Phone'] = phones[0].text
+    
+    filing_data['PrincipalOfficer'] = get_text_or_none(root, './/efile:IRS990/efile:PrincipalOfficerNm')
+    if not filing_data.get('PrincipalOfficer'):
+        filing_data['PrincipalOfficer'] = get_text_or_none(root, './/efile:Form990PartVIISectionAGrp/efile:PersonNm')
+    
     irs990 = root.find('.//efile:IRS990', namespaces=NS)
     if irs990 is not None:
         filing_data['TotalAssetsEOY'] = parse_int(get_text(irs990, './/efile:TotalAssetsEOYAmt'))
@@ -113,21 +123,34 @@ def parse_xml_file(filepath):
     filing_data['officers'] = officers
     filing_data['RawXMLPath'] = filepath
     
+    if filing_data.get('State') not in ('FL', 'NY'):
+        return None
+    
+    assets = filing_data.get('TotalAssetsEOY')
+    if assets is None:
+        return None
+    if assets < 1000000:
+        return None
+
     return filing_data
+
 
 def upsert_organization(conn, data):
     cursor = conn.cursor()
     cursor.execute("""
         INSERT OR REPLACE INTO organizations 
-        (EIN, LegalName, City, State, WebsiteUrl, MissionDescription)
-        VALUES (?, ?, ?, ?, ?, ?)
+        (EIN, LegalName, City, State, WebsiteUrl, MissionDescription, Phone, PrincipalOfficer, NTEECode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data['EIN'],
         data.get('OrgName'),
         data.get('City'),
         data.get('State'),
         data.get('WebsiteUrl'),
-        data.get('MissionDesc')
+        data.get('MissionDesc'),
+        data.get('Phone'),
+        data.get('PrincipalOfficer'),
+        data.get('NTEECode')
     ))
 
 def upsert_filing(conn, data):

@@ -8,7 +8,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     SubsectionCode TEXT,
     Status TEXT,
     MissionDescription TEXT,
-    WebsiteUrl TEXT
+    WebsiteUrl TEXT,
+    Phone TEXT,
+    PrincipalOfficer TEXT,
+    UNIQUE(EIN)
 );
 
 -- Filings table

@@ -5,31 +5,59 @@ import os
 
 DB_PATH = "database/nonprofit_intelligence.db"
 
-# Password protection
+# Password protection - Python session only (resets when browser closes)
+
 if 'password_correct' not in st.session_state:
     st.session_state['password_correct'] = False
-
+    
 if not st.session_state['password_correct']:
-    st.title("🔒 Nonprofit Intelligence Dashboard")
+    st.title("🔒 IRS 990 FL & NY Search")
     st.markdown("This dashboard is password protected.")
     
-    # Check if secrets.toml exists (local) or use Streamlit Cloud secrets
     try:
         default_password = st.secrets.get("password", "")
     except:
         default_password = ""
     
-    password = st.text_input("Enter password to access:", type="password")
-    
-    if st.button("Access Dashboard"):
-        if password == default_password and default_password:
-            st.session_state['password_correct'] = True
-            st.rerun()
-        else:
-            st.error("Incorrect password. Please contact the owner for access.")
+    with st.form("login_form"):
+        password = st.text_input("Enter password to access:")
+        submitted = st.form_submit_button("Access Dashboard")
+        
+        if submitted:
+            if password == default_password and default_password:
+                st.session_state['password_correct'] = True
+                st.rerun()
+            else:
+                st.error("Incorrect password. Please contact the owner for access.")
     st.stop()
 
 st.set_page_config(page_title="Nonprofit Intelligence", layout="wide")
+
+# Simple accent - green highlights only
+st.markdown("""
+<style>
+    /* Buttons - green */
+    .stButton > button {
+        background-color: #00C853 !important;
+        color: #000 !important;
+    }
+    
+    /* Default text - white */
+    .stApp, p, div, span, li, td, th, label {
+        color: #ffffff !important;
+    }
+    
+    /* Metric values in quick stats - green */
+    [data-testid="stMetricValue"] {
+        color: #00C853 !important;
+    }
+    
+    /* Metric labels - white */
+    [data-testid="stMetricLabel"] {
+        color: #ffffff !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -44,6 +72,8 @@ def load_summary_data():
             o.State,
             o.City,
             o.NTEECode,
+            o.Phone,
+            o.PrincipalOfficer,
             f.TotalAssetsEOY,
             f.TotalRevenueCY,
             f.TotalExpensesCY,
@@ -126,61 +156,143 @@ def main():
         st.session_state.selected_ein = None
     
     if st.session_state.selected_ein:
-        show_org_detail(st.session_state.selected_ein)
+        with st.spinner("Loading organization details..."):
+            show_org_detail(st.session_state.selected_ein)
     else:
         show_dashboard()
 
 def show_dashboard():
-    st.title("Nonprofit Prospect Dashboard")
+    st.title("IRS 990 FL & NY Search")
     
-    df = load_summary_data()
+    tab1, tab2 = st.tabs(["Dashboard", "FAQ & Help"])
     
-    if df.empty:
-        st.warning("No data available. Please run the data pipeline first.")
-        return
+    with tab2:
+        st.markdown("""
+        ## About This Dashboard
+        This dashboard provides intelligence on nonprofit organizations in Florida and New York 
+        with $1M to $10M in assets. It's designed to help identify prospective clients for accounting/financial services.
+        
+        ## Data Source
+        - **IRS Form 990** filings (publicly available)
+        - Data includes financial metrics, executive compensation, and organizational details
+        - Updated periodically from raw IRS XML files
+        
+        ## Metrics Explained
+        
+        ### Lead Score (0-100)
+        A composite score ranking organizations by their financial health and efficiency:
+        - **Revenue Growth (25%)**: Year-over-year revenue growth
+        - **Program Expense Ratio (30%)**: % of expenses going to programs (higher = better)
+        - **Operating Surplus (20%)**: Positive surplus = +20 points
+        - **Liability Ratio (15%)**: Lower liabilities relative to assets = better
+        - **Exec Compensation (10%)**: Lower exec pay relative to revenue = better
+        
+        ### Revenue Growth (YoY)
+        Year-over-year change in total revenue. Positive = growing, negative = declining.
+        
+        ### Program Ratio
+        Percentage of total expenses dedicated to program services (vs. administration/fundraising).
+        - **70%+** = Excellent
+        - **50-70%** = Good  
+        - **<50%** = May indicate inefficiency
+        
+        ### Assets
+        Total assets at fiscal year end.
+        
+        ### Revenue
+        Total revenue for the current fiscal year.
+        
+        ## How to Use
+        1. Use sidebar filters to narrow down prospects (by state, score, assets, etc.)
+        2. Click any organization to view detailed financials
+        3. Update contact status to track your outreach
+        4. Use watchlist to flag promising prospects
+        5. Export filtered lists to CSV for external tracking
+        """)
     
-    df['ContactStatus'] = df['ContactStatus'].fillna('not_contacted')
-    df['IsWatchlisted'] = df['IsWatchlisted'].fillna(0)
-    
-    latest_data = df.sort_values('TaxYear', ascending=False).drop_duplicates(subset=['EIN'], keep='first')
-    
-    st.sidebar.header("Filters")
-    
-    status_options = ['not_contacted', 'called_no_answer', 'called_not_interested', 
-                     'called_interested', 'meeting_scheduled', 'client']
-    selected_statuses = st.sidebar.multiselect(
-        "Contact Status", status_options, default=['not_contacted']
-    )
-    latest_data = latest_data[latest_data['ContactStatus'].isin(selected_statuses)]
-    
-    state_options = ['FL', 'NY']
-    selected_states = st.sidebar.multiselect(
-        "State", state_options, default=state_options
-    )
-    latest_data = latest_data[latest_data['State'].isin(selected_states)]
-    
-    min_score = int(latest_data['LeadScore'].min()) if not latest_data['LeadScore'].isna().all() else 0
-    max_score = int(latest_data['LeadScore'].max()) if not latest_data['LeadScore'].isna().all() else 100
-    min_lead_score = st.sidebar.slider("Min Lead Score", 0, 100, min_score)
-    latest_data = latest_data[latest_data['LeadScore'] >= min_lead_score]
-    
-    if 'TotalAssetsEOY' in latest_data.columns:
-        min_assets = latest_data['TotalAssetsEOY'].min() if latest_data['TotalAssetsEOY'].notna().any() else 1000000
-        max_assets = latest_data['TotalAssetsEOY'].max() if latest_data['TotalAssetsEOY'].notna().any() else 10000000
-        if min_assets == max_assets:
-            max_assets = min_assets + 1000000
-        asset_range = st.sidebar.slider("Asset Range ($)", int(min_assets), int(max_assets), (int(min_assets), int(max_assets)))
+    with tab1:
+        df = load_summary_data()
+        
+        if df.empty:
+            st.warning("No data available. Please run the data pipeline first.")
+            return
+        
+        df['ContactStatus'] = df['ContactStatus'].fillna('not_contacted')
+        df['IsWatchlisted'] = df['IsWatchlisted'].fillna(0)
+        
+        latest_data = df.sort_values('TaxYear', ascending=False).drop_duplicates(subset=['EIN'], keep='first')
+        
+        st.sidebar.header("Filters")
+        
+        st.sidebar.markdown("**Filter by:**")
+        
+        status_options = ['not_contacted', 'called_no_answer', 'called_not_interested', 
+                         'called_interested', 'meeting_scheduled', 'client']
+        selected_statuses = st.sidebar.multiselect(
+            "Contact Status", status_options, default=['not_contacted'],
+            help="Filter organizations by your contact status tracking"
+        )
+        latest_data = latest_data[latest_data['ContactStatus'].isin(selected_statuses)]
+        
+        state_options = ['FL', 'NY']
+        selected_states = st.sidebar.multiselect(
+            "State (FL/NY)", state_options, default=state_options,
+            help="Filter by state - Florida or New York"
+        )
+        latest_data = latest_data[latest_data['State'].isin(selected_states)]
+        
+        min_score = int(latest_data['LeadScore'].min()) if not latest_data['LeadScore'].isna().all() else 0
+        max_score = int(latest_data['LeadScore'].max()) if not latest_data['LeadScore'].isna().all() else 100
+        min_lead_score = st.sidebar.slider(
+            "Min Lead Score", 0, 100, min_score,
+            help="Minimum composite score (0-100). Higher scores indicate better prospects based on financial health metrics."
+        )
+        latest_data = latest_data[latest_data['LeadScore'] >= min_lead_score]
+        
+        if 'TotalAssetsEOY' in latest_data.columns:
+            min_assets = 1000000  # Always start at $1M
+            max_assets = 50000000  # Max slider goes to $50M
+            default_max = 10000000  # Default selection is $10M
+            
+            # Custom styled label with formatted numbers
+            st.sidebar.markdown(f"""
+            <div style="color: #00C853; font-weight: bold; margin-bottom: -10px;">
+                Asset Range: ${min_assets:,.0f} - ${default_max:,.0f}
+            </div>
+            """, unsafe_allow_html=True)
+            
+            asset_range = st.sidebar.slider(
+                "",
+                min_assets, max_assets, 
+                (min_assets, default_max),
+                help="Filter by total assets at fiscal year end"
+            )
         latest_data = latest_data[
             (latest_data['TotalAssetsEOY'] >= asset_range[0]) & 
             (latest_data['TotalAssetsEOY'] <= asset_range[1])
         ]
     
+    # Filter by Tax Year
+    tax_years = sorted(latest_data['TaxYear'].dropna().unique().tolist())
+    if tax_years:
+        selected_years = st.sidebar.multiselect(
+            "Tax Year", tax_years, default=tax_years,
+            help="Filter by IRS Form 990 filing year"
+        )
+        latest_data = latest_data[latest_data['TaxYear'].isin(selected_years)]
+    
     ntee_categories = latest_data['NTEECode'].dropna().unique().tolist()
     if ntee_categories:
-        selected_ntee = st.sidebar.multiselect("NTEE Category", ntee_categories, default=ntee_categories[:5])
+        selected_ntee = st.sidebar.multiselect(
+            "NTEE Category", ntee_categories, default=ntee_categories[:5],
+            help="National Taxonomy of Exempt Entities code - categories like Arts, Education, Health, etc."
+        )
         latest_data = latest_data[latest_data['NTEECode'].isin(selected_ntee)]
     
-    min_program_ratio = st.sidebar.slider("Min Program Expense Ratio", 0.0, 1.0, 0.0)
+    min_program_ratio = st.sidebar.slider(
+        "Min Program Expense Ratio", 0.0, 1.0, 0.0,
+        help="Minimum percentage of expenses going to programs. 70%+ is excellent."
+    )
     if 'ProgramExpenseRatio' in latest_data.columns:
         latest_data = latest_data[latest_data['ProgramExpenseRatio'] >= min_program_ratio]
     
@@ -199,27 +311,51 @@ def show_dashboard():
         st.sidebar.metric("Avg Program Ratio", f"{latest_data['ProgramExpenseRatio'].mean()*100:.1f}%")
     
     st.markdown("### Key Metrics")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("Total Orgs", len(latest_data), help="Number of organizations matching current filters")
+    with col2:
+        avg_score = latest_data['LeadScore'].mean() if not latest_data['LeadScore'].isna().all() else 0
+        st.metric("Avg Lead Score", f"{avg_score:.1f}", help="Composite score (0-100) based on revenue growth, program ratio, operating surplus, liability ratio, and executive compensation. Higher = better prospect.")
+    with col3:
+        avg_growth = latest_data['RevenueGrowthYoY'].mean() if not latest_data['RevenueGrowthYoY'].isna().all() else 0
+        st.metric("Avg Revenue Growth", f"{avg_growth*100:.1f}%", help="Year-over-year average revenue change. Positive = growing organizations")
+    with col4:
+        avg_program = latest_data['ProgramExpenseRatio'].mean() if not latest_data['ProgramExpenseRatio'].isna().all() else 0
+        st.metric("Avg Program Ratio", f"{avg_program*100:.1f}%", help="Percentage of expenses going to programs. 70%+ = excellent, 50-70% = good, <50% = may indicate inefficiency")
+    with col5:
+        total_revenue = latest_data['TotalRevenueCY'].sum() / 1e9 if not latest_data['TotalRevenueCY'].isna().all() else 0
+        st.metric("Total Revenue", f"${total_revenue:.1f}B", help="Combined total revenue for all filtered organizations")
+    
+    st.markdown("### Additional Insights")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total Orgs Matching", len(latest_data))
+        pos_growth = len(latest_data[latest_data['RevenueGrowthYoY'] > 0]) if 'RevenueGrowthYoY' in latest_data.columns else 0
+        pct_pos = pos_growth / len(latest_data) * 100 if len(latest_data) > 0 else 0
+        st.metric("Org w/ Positive Growth", f"{pct_pos:.0f}%", help="Percentage of organizations with positive year-over-year revenue growth")
     with col2:
-        avg_score = latest_data['LeadScore'].mean() if not latest_data['LeadScore'].isna().all() else 0
-        st.metric("Avg Lead Score", f"{avg_score:.1f}")
+        pos_surplus = len(latest_data[latest_data['SurplusDeficitCY'] > 0]) if 'SurplusDeficitCY' in latest_data.columns else 0
+        pct_surplus = pos_surplus / len(latest_data) * 100 if len(latest_data) > 0 else 0
+        st.metric("Org w/ Operating Surplus", f"{pct_surplus:.0f}%", help="Percentage of organizations with more revenue than expenses (operating surplus)")
     with col3:
-        avg_growth = latest_data['RevenueGrowthYoY'].mean() if not latest_data['RevenueGrowthYoY'].isna().all() else 0
-        st.metric("Avg Revenue Growth", f"{avg_growth*100:.1f}%")
+        avg_admin = latest_data['AdminExpenseRatio'].mean() * 100 if not latest_data['AdminExpenseRatio'].isna().all() else 0
+        st.metric("Avg Admin Ratio", f"{avg_admin:.1f}%", help="Percentage of expenses used for administrative costs. Lower is generally better.")
     with col4:
-        avg_program = latest_data['ProgramExpenseRatio'].mean() if not latest_data['ProgramExpenseRatio'].isna().all() else 0
-        st.metric("Avg Program Ratio", f"{avg_program*100:.1f}%")
+        avg_exec = latest_data['ExecCompPercentOfRevenue'].mean() * 100 if not latest_data['ExecCompPercentOfRevenue'].isna().all() else 0
+        st.metric("Avg Exec Comp %", f"{avg_exec:.1f}%", help="Executive compensation as percentage of revenue. Lower = more funds go to mission.")
     
     st.markdown("### Organization List")
     
-    display_cols = ['OrgName', 'City', 'State', 'TotalAssetsEOY', 'TotalRevenueCY', 
+    display_cols = ['OrgName', 'Phone', 'City', 'State', 'TaxYear', 'TotalAssetsEOY', 'TotalRevenueCY', 
                     'RevenueGrowthYoY', 'ProgramExpenseRatio', 'LeadScore']
     
     display_df = latest_data[display_cols].copy()
     
+    display_df['Phone'] = display_df['Phone'].apply(
+        lambda x: x if pd.notna(x) else "N/A"
+    )
     display_df['TotalAssetsEOY'] = display_df['TotalAssetsEOY'].apply(
         lambda x: f"${x/1000000:.1f}M" if pd.notna(x) else "N/A"
     )
@@ -238,8 +374,10 @@ def show_dashboard():
     
     display_df = display_df.rename(columns={
         'OrgName': 'Organization',
+        'Phone': 'Phone',
         'City': 'City',
         'State': 'State',
+        'TaxYear': 'Year',
         'TotalAssetsEOY': 'Assets',
         'TotalRevenueCY': 'Revenue',
         'RevenueGrowthYoY': 'Rev Growth',
@@ -247,19 +385,87 @@ def show_dashboard():
         'LeadScore': 'Score'
     })
     
-    selected_row = st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row"
-    )
+    # Pagination controls with numbered buttons
+    PAGE_SIZE = 70
+    total_rows = len(display_df)
+    total_pages = max(1, (total_rows + PAGE_SIZE - 1) // PAGE_SIZE)
     
-    if selected_row.selection and len(selected_row.selection['rows']) > 0:
-        idx = selected_row.selection['rows'][0]
-        ein = latest_data.iloc[idx]['EIN']
-        st.session_state.selected_ein = ein
-        st.rerun()
+    # Initialize page in session state if not exists
+    if 'org_page' not in st.session_state:
+        st.session_state.org_page = 1
+    
+    page = st.session_state.org_page
+    start_idx = (page - 1) * PAGE_SIZE
+    end_idx = min(start_idx + PAGE_SIZE, total_rows)
+    paged_df = display_df.iloc[start_idx:end_idx].copy()
+    paged_df.insert(0, '#', range(start_idx + 1, end_idx + 1))
+    
+    st.caption(f"Showing {start_idx + 1}-{end_idx} of {total_rows} organizations")
+    
+    # Numbered page buttons
+    page_cols = st.columns(min(total_pages, 10))
+    for i, col in enumerate(page_cols):
+        with col:
+            btn_label = str(i + 1)
+            if st.button(btn_label, key=f"page_btn_{i+1}"):
+                st.session_state.org_page = i + 1
+                st.rerun()
+    
+    # Show "..." and last page if more than 10 pages
+    if total_pages > 10:
+        col_last = st.columns(1)
+        with col_last[0]:
+            if st.button(f"... {total_pages}", key="page_btn_last"):
+                st.session_state.org_page = total_pages
+                st.rerun()
+    
+    # Render table with expandable rows
+    for i, row in enumerate(paged_df.itertuples()):
+        org_name = row.Organization
+        phone = row.Phone if hasattr(row, 'Phone') else ''
+        with st.expander(f"📋 {org_name} | 📞 {phone}"):
+            actual_idx = start_idx + i
+            ein = latest_data.iloc[actual_idx]['EIN']
+            
+            # Load and display org details inline
+            org_df, filings_df, metrics_df, exec_df, prospect_df = load_org_details(ein)
+            
+            if not org_df.empty:
+                org = org_df.iloc[0]
+                
+                city = org.get('City') or 'N/A'
+                st.markdown(f"**EIN:** {org['EIN']} | **City:** {city} | **State:** {org['State']} | **NTEE:** {org['NTEECode'] or 'N/A'}")
+                
+                if org.get('WebsiteUrl'):
+                    st.markdown(f"**Website:** [{org['WebsiteUrl']}]({org['WebsiteUrl']})")
+                
+                if org.get('Phone'):
+                    st.markdown(f"**Phone:** {org['Phone']}")
+                
+                if org.get('PrincipalOfficer'):
+                    st.markdown(f"**Principal Officer:** {org['PrincipalOfficer']}")
+                
+                if org.get('MissionDescription'):
+                    st.markdown("### Mission")
+                    st.markdown(org['MissionDescription'])
+                
+                if not filings_df.empty:
+                    latest = filings_df.iloc[0]
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        assets = latest.get('TotalAssetsEOY') or 0
+                        st.metric("Assets", f"${assets/1000000:.1f}M")
+                    with col2:
+                        revenue = latest.get('TotalRevenueCY') or 0
+                        st.metric("Revenue", f"${revenue/1000000:.1f}M")
+                    with col3:
+                        expenses = latest.get('TotalExpensesCY') or 0
+                        st.metric("Expenses", f"${expenses/1000000:.1f}M")
+                    with col4:
+                        net = latest.get('NetAssetsEOY') or 0
+                        st.metric("Net Assets", f"${net/1000000:.1f}M")
+    
+    st.stop()  # Stop here - no redirect needed
     
     col1, col2 = st.columns([1, 1])
     with col2:
@@ -296,6 +502,12 @@ def show_org_detail(ein):
     
     if org.get('WebsiteUrl'):
         st.markdown(f"**Website:** [{org['WebsiteUrl']}]({org['WebsiteUrl']})")
+    
+    if org.get('Phone'):
+        st.markdown(f"**Phone:** {org['Phone']}")
+    
+    if org.get('PrincipalOfficer'):
+        st.markdown(f"**Principal Officer:** {org['PrincipalOfficer']}")
     
     if org.get('MissionDescription'):
         st.markdown("### Mission")
@@ -377,34 +589,6 @@ def show_org_detail(ein):
         with col4:
             exec_pct = (latest_metrics.get('ExecCompPercentOfRevenue') or 0) * 100
             st.metric("Exec Comp %", f"{exec_pct:.1f}%")
-    
-    st.markdown("---")
-    st.markdown("### Executive Compensation")
-    
-    if not exec_df.empty:
-        exec_display = exec_df[['OfficerName', 'Title', 'ReportableCompFromOrg', 
-                                 'ReportableCompFromRelatedOrg', 'OtherCompensation']].copy()
-        exec_display['TotalComp'] = (
-            exec_display['ReportableCompFromOrg'].fillna(0) + 
-            exec_display['ReportableCompFromRelatedOrg'].fillna(0) + 
-            exec_display['OtherCompensation'].fillna(0)
-        )
-        
-        for col in ['ReportableCompFromOrg', 'ReportableCompFromRelatedOrg', 'OtherCompensation', 'TotalComp']:
-            exec_display[col] = exec_display[col].apply(lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A")
-        
-        exec_display = exec_display.rename(columns={
-            'OfficerName': 'Name',
-            'Title': 'Title',
-            'ReportableCompFromOrg': 'From Org',
-            'ReportableCompFromRelatedOrg': 'From Related',
-            'OtherCompensation': 'Other',
-            'TotalComp': 'Total'
-        })
-        
-        st.dataframe(exec_display, use_container_width=True, hide_index=True)
-    else:
-        st.info("No executive compensation data available")
     
     st.markdown("---")
     st.markdown("### Risk Flags")
