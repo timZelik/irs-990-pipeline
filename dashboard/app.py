@@ -113,14 +113,21 @@ def load_summary_data():
     """
     
     df = pd.read_sql_query(query, conn)
+    df.columns = [c.lower() for c in df.columns]
     conn.close()
+    return df
+
+def lowercase_columns(df):
+    if df is not None and not df.empty:
+        df.columns = [c.lower() for c in df.columns]
     return df
 
 def load_org_details(ein):
     conn = get_connection()
     
-    org_query = "SELECT * FROM organizations WHERE EIN = %s"
+    org_query = 'SELECT * FROM organizations WHERE "ein" = %s'
     org_df = pd.read_sql_query(org_query, conn, params=[ein])
+    org_df = lowercase_columns(org_df)
     
     filings_query = """
         SELECT * FROM filings 
@@ -128,6 +135,7 @@ def load_org_details(ein):
         ORDER BY "taxyear" DESC
     """
     filings_df = pd.read_sql_query(filings_query, conn, params=[ein])
+    filings_df = lowercase_columns(filings_df)
     
     metrics_query = """
         SELECT * FROM derived_metrics 
@@ -135,6 +143,7 @@ def load_org_details(ein):
         ORDER BY "taxyear" DESC
     """
     metrics_df = pd.read_sql_query(metrics_query, conn, params=[ein])
+    metrics_df = lowercase_columns(metrics_df)
     
     exec_query = """
         SELECT * FROM executive_compensation 
@@ -142,9 +151,11 @@ def load_org_details(ein):
         ORDER BY "taxyear" DESC
     """
     exec_df = pd.read_sql_query(exec_query, conn, params=[ein])
+    exec_df = lowercase_columns(exec_df)
     
     prospect_query = 'SELECT * FROM prospect_activity WHERE "ein" = %s'
     prospect_df = pd.read_sql_query(prospect_query, conn, params=[ein])
+    prospect_df = lowercase_columns(prospect_df)
     
     conn.close()
     
