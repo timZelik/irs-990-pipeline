@@ -1,0 +1,33 @@
+# Data files (large, don't commit)
+data/*.csv
+data/*.db
+data/raw_xml/*.xml
+data/*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/
+.streamlit/secrets.toml  # Don't commit actual secrets
+streamlit.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db-journal
