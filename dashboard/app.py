@@ -1,9 +1,21 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
+import psycopg2
 import os
 
-DB_PATH = "database/nonprofit_intelligence.db"
+def get_db_connection():
+    try:
+        conn_str = st.secrets["database"]["url"]
+        return psycopg2.connect(conn_str)
+    except:
+        return None
+
+def get_connection():
+    conn = get_db_connection()
+    if conn is None:
+        st.error("Database connection failed. Please configure Streamlit secrets.")
+        st.stop()
+    return conn
 
 # Password protection - Python session only (resets when browser closes)
 
