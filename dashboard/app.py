@@ -2,14 +2,22 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import os
+import socket
 
 def get_db_connection():
     try:
         conn_str = st.secrets["database"]["url"]
-        # Add sslmode=require if not present
+        
+        # Try direct IP connection if hostname fails
         if 'sslmode' not in conn_str:
             conn_str += '?sslmode=require' if '?' not in conn_str else '&sslmode=require'
-        return psycopg2.connect(conn_str)
+        
+        try:
+            return psycopg2.connect(conn_str)
+        except socket.gaierror:
+            # Fallback: try with direct IPv6 IP
+            conn_str = conn_str.replace('db.wvrmrgfowzbonjzgtahi.supabase.co', '[2600:1f16:1cd0:3330:672f:5e91:d513:a63b]')
+            return psycopg2.connect(conn_str)
     except Exception as e:
         st.error(f"Database connection error: {e}")
         return None
