@@ -71,9 +71,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def get_connection():
-    return sqlite3.connect(DB_PATH)
-
 def load_summary_data():
     conn = get_connection()
     
@@ -121,32 +118,32 @@ def load_summary_data():
 def load_org_details(ein):
     conn = get_connection()
     
-    org_query = "SELECT * FROM organizations WHERE EIN = ?"
-    org_df = pd.read_sql_query(org_query, conn, params=(ein,))
+    org_query = "SELECT * FROM organizations WHERE EIN = %s"
+    org_df = pd.read_sql_query(org_query, conn, params=[ein])
     
     filings_query = """
         SELECT * FROM filings 
-        WHERE EIN = ? 
+        WHERE EIN = %s 
         ORDER BY TaxYear DESC
     """
-    filings_df = pd.read_sql_query(filings_query, conn, params=(ein,))
+    filings_df = pd.read_sql_query(filings_query, conn, params=[ein])
     
     metrics_query = """
         SELECT * FROM derived_metrics 
-        WHERE EIN = ? 
+        WHERE EIN = %s 
         ORDER BY TaxYear DESC
     """
-    metrics_df = pd.read_sql_query(metrics_query, conn, params=(ein,))
+    metrics_df = pd.read_sql_query(metrics_query, conn, params=[ein])
     
     exec_query = """
         SELECT * FROM executive_compensation 
-        WHERE EIN = ? 
+        WHERE EIN = %s 
         ORDER BY TaxYear DESC
     """
-    exec_df = pd.read_sql_query(exec_query, conn, params=(ein,))
+    exec_df = pd.read_sql_query(exec_query, conn, params=[ein])
     
-    prospect_query = "SELECT * FROM prospect_activity WHERE EIN = ?"
-    prospect_df = pd.read_sql_query(prospect_query, conn, params=(ein,))
+    prospect_query = "SELECT * FROM prospect_activity WHERE EIN = %s"
+    prospect_df = pd.read_sql_query(prospect_query, conn, params=[ein])
     
     conn.close()
     
@@ -156,9 +153,14 @@ def save_prospect_activity(ein, contact_status, is_watchlisted, notes):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO prospect_activity 
+        INSERT INTO prospect_activity 
         (EIN, ContactStatus, IsWatchlisted, PrivateNotes, UpdatedAt)
-        VALUES (?, ?, ?, ?, datetime('now'))
+        VALUES (%s, %s, %s, %s, NOW())
+        ON CONFLICT (EIN) DO UPDATE SET
+        ContactStatus = EXCLUDED.ContactStatus,
+        IsWatchlisted = EXCLUDED.IsWatchlisted,
+        PrivateNotes = EXCLUDED.PrivateNotes,
+        UpdatedAt = EXCLUDED.UpdatedAt
     """, (ein, contact_status, 1 if is_watchlisted else 0, notes))
     conn.commit()
     conn.close()
