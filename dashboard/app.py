@@ -25,30 +25,14 @@ def get_connection():
         st.stop()
     return conn
 
-def execute_query(query):
-    """Execute a raw SQL query via Supabase"""
-    conn = get_connection()
-    if conn is None:
-        return None
-    try:
-        return conn.rpc('exec_sql', {'query': query}).execute()
-    except Exception as e:
-        # Fallback: try fetching tables directly
-        st.error(f"Query error: {e}")
-        return None
-
-def fetch_table(table_name, columns="*", filters=None):
+def fetch_table(table_name, columns="*"):
     """Fetch data from a table"""
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
     
     try:
-        query = conn.table(table_name).select(columns)
-        if filters:
-            for col, val in filters.items():
-                query = query.eq(col, val)
-        response = query.execute()
+        response = conn.table(table_name).select(columns).execute()
         if response.data:
             return pd.DataFrame(response.data)
         return pd.DataFrame()
@@ -114,8 +98,9 @@ def load_summary_data():
     conn = get_connection()
     
     # Fetch organizations with FL/NY
-    orgs = fetch_table("organizations", "*", {"state": "FL"})
-    orgs_ny = fetch_table("organizations", "*", {"state": "NY"})
+    orgs_fl = fetch_table("organizations", "*")
+    orgs = orgs_fl[orgs_fl['state'] == 'FL']
+    orgs_ny = orgs_fl[orgs_fl['state'] == 'NY']
     if not orgs_ny.empty:
         orgs = pd.concat([orgs, orgs_ny]) if not orgs.empty else orgs_ny
     
@@ -149,37 +134,20 @@ def lowercase_columns(df):
 def load_org_details(ein):
     conn = get_connection()
     
-    org_query = 'SELECT * FROM organizations WHERE "ein" = %s'
-    org_df = pd.read_sql_query(org_query, conn, params=[ein])
-    org_df = lowercase_columns(org_df)
+    org_df = fetch_table("organizations", "*")
+    org_df = org_df[org_df['ein'] == ein]
     
-    filings_query = """
-        SELECT * FROM filings 
-        WHERE "ein" = %s 
-        ORDER BY "taxyear" DESC
-    """
-    filings_df = pd.read_sql_query(filings_query, conn, params=[ein])
-    filings_df = lowercase_columns(filings_df)
+    filings_df = fetch_table("filings", "*")
+    filings_df = filings_df[filings_df['ein'] == ein].sort_values('taxyear', ascending=False)
     
-    metrics_query = """
-        SELECT * FROM derived_metrics 
-        WHERE "ein" = %s 
-        ORDER BY "taxyear" DESC
-    """
-    metrics_df = pd.read_sql_query(metrics_query, conn, params=[ein])
-    metrics_df = lowercase_columns(metrics_df)
+    metrics_df = fetch_table("derived_metrics", "*")
+    metrics_df = metrics_df[metrics_df['ein'] == ein].sort_values('taxyear', ascending=False)
     
-    exec_query = """
-        SELECT * FROM executive_compensation 
-        WHERE "ein" = %s 
-        ORDER BY "taxyear" DESC
-    """
-    exec_df = pd.read_sql_query(exec_query, conn, params=[ein])
-    exec_df = lowercase_columns(exec_df)
+    exec_df = fetch_table("executive_compensation", "*")
+    exec_df = exec_df[exec_df['ein'] == ein].sort_values('taxyear', ascending=False)
     
-    prospect_query = 'SELECT * FROM prospect_activity WHERE "ein" = %s'
-    prospect_df = pd.read_sql_query(prospect_query, conn, params=[ein])
-    prospect_df = lowercase_columns(prospect_df)
+    prospect_df = fetch_table("prospect_activity", "*")
+    prospect_df = prospect_df[prospect_df['ein'] == ein]
     
     conn.close()
     
@@ -187,19 +155,30 @@ def load_org_details(ein):
 
 def save_prospect_activity(ein, contact_status, is_watchlisted, notes):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO prospect_activity 
-        ("ein", "contactstatus", "iswatchlisted", "privatenotes", "updatedat")
-        VALUES (%s, %s, %s, %s, NOW())
-        ON CONFLICT ("ein") DO UPDATE SET
-        "contactstatus" = EXCLUDED."contactstatus",
-        "iswatchlisted" = EXCLUDED."iswatchlisted",
-        "privatenotes" = EXCLUDED."privatenotes",
-        "updatedat" = EXCLUDED."updatedat"
-    """, (ein, contact_status, 1 if is_watchlisted else 0, notes))
-    conn.commit()
-    conn.close()
+    if conn is None:
+        return
+    
+    try:
+        # Check if record exists
+        existing = conn.table("prospect_activity").select("*").eq("ein", ein).execute()
+        
+        if existing.data:
+            # Update
+            conn.table("prospect_activity").update({
+                "contactstatus": contact_status,
+                "iswatchlisted": 1 if is_watchlisted else 0,
+                "privatenotes": notes
+            }).eq("ein", ein).execute()
+        else:
+            # Insert
+            conn.table("prospect_activity").insert({
+                "ein": ein,
+                "contactstatus": contact_status,
+                "iswatchlisted": 1 if is_watchlisted else 0,
+                "privatenotes": notes
+            }).execute()
+    except Exception as e:
+        st.error(f"Error saving: {e}")
 
 def main():
     if 'selected_ein' not in st.session_state:
