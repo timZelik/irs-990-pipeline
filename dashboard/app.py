@@ -300,6 +300,9 @@ def show_dashboard():
     if search_query:
         latest_data = latest_data[latest_data['OrgName'].str.contains(search_query, case=False, na=False)]
     
+    # Sort by year (newest first)
+    latest_data = latest_data.sort_values('TaxYear', ascending=False)
+    
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Quick Stats")
     st.sidebar.metric("Total Orgs", len(latest_data))
@@ -423,7 +426,8 @@ def show_dashboard():
     for i, row in enumerate(paged_df.itertuples()):
         org_name = row.Organization
         phone = row.Phone if hasattr(row, 'Phone') else ''
-        with st.expander(f"📋 {org_name} | 📞 {phone}"):
+        year = row.Year if hasattr(row, 'Year') else ''
+        with st.expander(f"📅 {year} | 📋 {org_name} | 📞 {phone}"):
             actual_idx = start_idx + i
             ein = latest_data.iloc[actual_idx]['EIN']
             
