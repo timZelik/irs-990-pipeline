@@ -1,36 +1,19 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
+from supabase import create_client
 import os
-import socket
-import urllib.parse
+
+# Supabase client - will be initialized on first use
+supabase_client = None
 
 def get_db_connection():
+    global supabase_client
     try:
-        conn_str = st.secrets["database"]["url"]
-        
-        # Add sslmode=require if not present
-        if 'sslmode' not in conn_str:
-            conn_str += '?sslmode=require' if '?' not in conn_str else '&sslmode=require'
-        
-        try:
-            return psycopg2.connect(conn_str)
-        except socket.gaierror:
-            # Fallback: try with direct IPv6 IP using proper format
-            parsed = urllib.parse.urlparse(conn_str)
-            ipv6_host = "2600:1f16:1cd0:3330:672f:5e91:d513:a63b"
-            new_host = f"[{ipv6_host}]:{parsed.port or 5432}"
-            new_conn = f"postgresql://{parsed.username}:{parsed.password}@{new_host}/{parsed.path.lstrip('/')}?sslmode=require"
-            return psycopg2.connect(new_conn)
-        except Exception as e:
-            if "Cannot assign requested address" in str(e):
-                # Try direct IPv6 IP
-                parsed = urllib.parse.urlparse(conn_str)
-                ipv6_host = "2600:1f16:1cd0:3330:672f:5e91:d513:a63b"
-                new_host = f"[{ipv6_host}]:{parsed.port or 5432}"
-                new_conn = f"postgresql://{parsed.username}:{parsed.password}@{new_host}/{parsed.path.lstrip('/')}?sslmode=require"
-                return psycopg2.connect(new_conn)
-            raise
+        if supabase_client is None:
+            supabase_url = st.secrets["database"]["url"]
+            supabase_key = st.secrets["database"]["key"]
+            supabase_client = create_client(supabase_url, supabase_key)
+        return supabase_client
     except Exception as e:
         st.error(f"Database connection error: {e}")
         return None
@@ -41,6 +24,37 @@ def get_connection():
         st.error("Database connection failed. Please configure Streamlit secrets.")
         st.stop()
     return conn
+
+def execute_query(query):
+    """Execute a raw SQL query via Supabase"""
+    conn = get_connection()
+    if conn is None:
+        return None
+    try:
+        return conn.rpc('exec_sql', {'query': query}).execute()
+    except Exception as e:
+        # Fallback: try fetching tables directly
+        st.error(f"Query error: {e}")
+        return None
+
+def fetch_table(table_name, columns="*", filters=None):
+    """Fetch data from a table"""
+    conn = get_connection()
+    if conn is None:
+        return pd.DataFrame()
+    
+    try:
+        query = conn.table(table_name).select(columns)
+        if filters:
+            for col, val in filters.items():
+                query = query.eq(col, val)
+        response = query.execute()
+        if response.data:
+            return pd.DataFrame(response.data)
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error fetching {table_name}: {e}")
+        return pd.DataFrame()
 
 # Password protection - Python session only (resets when browser closes)
 
@@ -99,46 +113,32 @@ st.markdown("""
 def load_summary_data():
     conn = get_connection()
     
-    query = """
-        SELECT 
-            o."legalname" as "orgname",
-            o."ein" as "ein",
-            o."state" as "state",
-            o."city" as "city",
-            o."nteecode" as "nteecode",
-            o."phone" as "phone",
-            o."principalofficer" as "principalofficer",
-            f."totalassetseoy" as "totalassetseoy",
-            f."totalrevenuecy" as "totalrevenuecy",
-            f."totalexpensescy" as "totalexpensescy",
-            f."netassetseoy" as "netassetseoy",
-            f."programexpensesamt" as "programexpensesamt",
-            f."fundraisingexpensescy" as "fundraisingexpensescy",
-            f."contributionscy" as "contributionscy",
-            f."surplusdeficitcy" as "surplusdeficitcy",
-            d."revenuegrowthyoy" as "revenuegrowthyoy",
-            d."programexpenseratio" as "programexpenseratio",
-            d."adminexpenseratio" as "adminexpenseratio",
-            d."fundraisingexpenseratio" as "FundraisingExpenseRatio",
-            d."execcomppercentofrevenue" as "execcomppercentofrevenue",
-            d."liabilitytoassetratio" as "LiabilityToAssetRatio",
-            d."contributiondependencypct" as "ContributionDependencyPct",
-            d."surplustrend" as "SurplusTrend",
-            d."leadscore" as "leadscore",
-            f."taxyear" as "taxyear",
-            p."contactstatus" as "contactstatus",
-            p."iswatchlisted" as "iswatchlisted"
-        FROM organizations o
-        LEFT JOIN filings f ON o."ein" = f."ein"
-        LEFT JOIN derived_metrics d ON o."ein" = d."ein" AND f."taxyear" = d."taxyear"
-        LEFT JOIN prospect_activity p ON o."ein" = p."ein"
-        WHERE o."state" IN ('FL', 'NY')
-        ORDER BY d."leadscore" DESC
-    """
+    # Fetch organizations with FL/NY
+    orgs = fetch_table("organizations", "*", {"state": "FL"})
+    orgs_ny = fetch_table("organizations", "*", {"state": "NY"})
+    if not orgs_ny.empty:
+        orgs = pd.concat([orgs, orgs_ny]) if not orgs.empty else orgs_ny
     
-    df = pd.read_sql_query(query, conn)
-    df.columns = [c.lower() for c in df.columns]
-    conn.close()
+    if orgs.empty:
+        return pd.DataFrame()
+    
+    # Fetch all filings
+    filings = fetch_table("filings")
+    
+    # Fetch all derived_metrics  
+    metrics = fetch_table("derived_metrics")
+    
+    # Fetch prospect_activity
+    prospect = fetch_table("prospect_activity")
+    
+    # Merge data
+    df = orgs.merge(filings, on="ein", how="left", suffixes=('', '_fil'))
+    df = df.merge(metrics, on=["ein", "taxyear"], how="left", suffixes=('', '_met'))
+    df = df.merge(prospect, on="ein", how="left", suffixes=('', '_pros'))
+    
+    # Sort by leadscore
+    df = df.sort_values('leadscore', ascending=False, na_position='last')
+    
     return df
 
 def lowercase_columns(df):
