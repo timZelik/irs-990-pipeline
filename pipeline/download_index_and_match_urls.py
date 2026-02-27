@@ -7,6 +7,9 @@ INDEX_URLS = [
     ('2021', 'https://apps.irs.gov/pub/epostcard/990/xml/2021/index_2021.csv'),
     ('2022', 'https://apps.irs.gov/pub/epostcard/990/xml/2022/index_2022.csv'),
     ('2023', 'https://apps.irs.gov/pub/epostcard/990/xml/2023/index_2023.csv'),
+    ('2024', 'https://apps.irs.gov/pub/epostcard/990/xml/2024/index_2024.csv'),
+    ('2025', 'https://apps.irs.gov/pub/epostcard/990/xml/2025/index_2025.csv'),
+    ('2026', 'https://apps.irs.gov/pub/epostcard/990/xml/2026/index_2026.csv'),
 ]
 
 TARGET_EINS_FILE = 'data/target_eins.csv'

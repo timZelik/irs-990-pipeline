@@ -15,7 +15,7 @@ ZIP_SUFFIXES = ['01A', '02A', '03A', '04A', '05A', '06A', '07A',
 def build_zip_urls():
     base = "https://apps.irs.gov/pub/epostcard/990/xml"
     urls = []
-    for year in [2021, 2022, 2023]:
+    for year in [2021, 2022, 2023, 2024, 2025, 2026]:
         for suffix in ZIP_SUFFIXES:
             url = f"{base}/{year}/{year}_TEOS_XML_{suffix}.zip"
             urls.append((year, url))
