@@ -99,8 +99,12 @@ def load_summary_data():
     
     # Fetch organizations with FL/NY
     orgs_fl = fetch_table("organizations", "*")
-    orgs = orgs_fl[orgs_fl['State'] == 'FL']
-    orgs_ny = orgs_fl[orgs_fl['State'] == 'NY']
+    
+    if orgs_fl.empty:
+        return pd.DataFrame()
+    
+    orgs = orgs_fl[orgs_fl['state'] == 'FL']
+    orgs_ny = orgs_fl[orgs_fl['state'] == 'NY']
     if not orgs_ny.empty:
         orgs = pd.concat([orgs, orgs_ny]) if not orgs.empty else orgs_ny
     
@@ -281,7 +285,7 @@ def show_dashboard():
             "state (FL/NY)", state_options, default=state_options,
             help="Filter by state - Florida or New York"
         )
-        latest_data = latest_data[latest_data['State'].isin(selected_states)]
+        latest_data = latest_data[latest_data['state'].isin(selected_states)]
         
         min_score = int(latest_data['leadscore'].min()) if not latest_data['leadscore'].isna().all() else 0
         max_score = int(latest_data['leadscore'].max()) if not latest_data['leadscore'].isna().all() else 100
@@ -480,7 +484,7 @@ def show_dashboard():
                 org = org_df.iloc[0]
                 
                 city = org.get('city') or 'N/A'
-                st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['State']} | **NTEE:** {org['nteecode'] or 'N/A'}")
+                st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['state']} | **NTEE:** {org['nteecode'] or 'N/A'}")
                 
                 if org.get('websiteurl'):
                     st.markdown(f"**Website:** [{org['websiteurl']}]({org['websiteurl']})")
