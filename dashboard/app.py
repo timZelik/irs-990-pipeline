@@ -232,8 +232,10 @@ def show_dashboard():
             st.warning("No data available. Please run the data pipeline first.")
             return
         
-        df['ContactStatus'] = df['ContactStatus'].fillna('not_contacted')
-        df['IsWatchlisted'] = df['IsWatchlisted'].fillna(0)
+        if 'ContactStatus' in df.columns:
+            df['ContactStatus'] = df['ContactStatus'].fillna('not_contacted')
+        if 'IsWatchlisted' in df.columns:
+            df['IsWatchlisted'] = df['IsWatchlisted'].fillna(0)
         
         latest_data = df.sort_values('TaxYear', ascending=False).drop_duplicates(subset=['EIN'], keep='first')
         
@@ -243,11 +245,12 @@ def show_dashboard():
         
         status_options = ['not_contacted', 'called_no_answer', 'called_not_interested', 
                          'called_interested', 'meeting_scheduled', 'client']
-        selected_statuses = st.sidebar.multiselect(
-            "Contact Status", status_options, default=['not_contacted'],
-            help="Filter organizations by your contact status tracking"
-        )
-        latest_data = latest_data[latest_data['ContactStatus'].isin(selected_statuses)]
+        if 'ContactStatus' in latest_data.columns:
+            selected_statuses = st.sidebar.multiselect(
+                "Contact Status", status_options, default=['not_contacted'],
+                help="Filter organizations by your contact status tracking"
+            )
+            latest_data = latest_data[latest_data['ContactStatus'].isin(selected_statuses)]
         
         state_options = ['FL', 'NY']
         selected_states = st.sidebar.multiselect(
