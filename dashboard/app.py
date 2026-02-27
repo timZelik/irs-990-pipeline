@@ -77,33 +77,33 @@ def load_summary_data():
     
     query = """
         SELECT 
-            o."legalname" as "OrgName",
-            o."ein" as "EIN",
-            o."state" as "State",
-            o."city" as "City",
-            o."nteecode" as "NTEECode",
-            o."phone" as "Phone",
-            o."principalofficer" as "PrincipalOfficer",
-            f."totalassetseoy" as "TotalAssetsEOY",
-            f."totalrevenuecy" as "TotalRevenueCY",
-            f."totalexpensescy" as "TotalExpensesCY",
-            f."netassetseoy" as "NetAssetsEOY",
-            f."programexpensesamt" as "ProgramExpensesAmt",
-            f."fundraisingexpensescy" as "FundraisingExpensesCY",
-            f."contributionscy" as "ContributionsCY",
-            f."surplusdeficitcy" as "SurplusDeficitCY",
-            d."revenuegrowthyoy" as "RevenueGrowthYoY",
-            d."programexpenseratio" as "ProgramExpenseRatio",
-            d."adminexpenseratio" as "AdminExpenseRatio",
+            o."legalname" as "orgname",
+            o."ein" as "ein",
+            o."state" as "state",
+            o."city" as "city",
+            o."nteecode" as "nteecode",
+            o."phone" as "phone",
+            o."principalofficer" as "principalofficer",
+            f."totalassetseoy" as "totalassetseoy",
+            f."totalrevenuecy" as "totalrevenuecy",
+            f."totalexpensescy" as "totalexpensescy",
+            f."netassetseoy" as "netassetseoy",
+            f."programexpensesamt" as "programexpensesamt",
+            f."fundraisingexpensescy" as "fundraisingexpensescy",
+            f."contributionscy" as "contributionscy",
+            f."surplusdeficitcy" as "surplusdeficitcy",
+            d."revenuegrowthyoy" as "revenuegrowthyoy",
+            d."programexpenseratio" as "programexpenseratio",
+            d."adminexpenseratio" as "adminexpenseratio",
             d."fundraisingexpenseratio" as "FundraisingExpenseRatio",
-            d."execcomppercentofrevenue" as "ExecCompPercentOfRevenue",
+            d."execcomppercentofrevenue" as "execcomppercentofrevenue",
             d."liabilitytoassetratio" as "LiabilityToAssetRatio",
             d."contributiondependencypct" as "ContributionDependencyPct",
             d."surplustrend" as "SurplusTrend",
-            d."leadscore" as "LeadScore",
-            f."taxyear" as "TaxYear",
-            p."contactstatus" as "ContactStatus",
-            p."iswatchlisted" as "IsWatchlisted"
+            d."leadscore" as "leadscore",
+            f."taxyear" as "taxyear",
+            p."contactstatus" as "contactstatus",
+            p."iswatchlisted" as "iswatchlisted"
         FROM organizations o
         LEFT JOIN filings f ON o."ein" = f."ein"
         LEFT JOIN derived_metrics d ON o."ein" = d."ein" AND f."taxyear" = d."taxyear"
@@ -243,22 +243,22 @@ def show_dashboard():
             st.warning("No data available. Please run the data pipeline first.")
             return
         
-        required_cols = ['EIN', 'OrgName', 'TaxYear']
+        required_cols = ['ein', 'orgname', 'taxyear']
         missing_cols = [c for c in required_cols if c not in df.columns]
         if missing_cols:
             st.warning(f"Missing columns in data: {missing_cols}. Please run the data pipeline.")
             return
         
-        if df['TaxYear'].isna().all():
+        if df['taxyear'].isna().all():
             st.warning("No filing data available. Please run the data pipeline first.")
             return
         
-        if 'ContactStatus' in df.columns:
-            df['ContactStatus'] = df['ContactStatus'].fillna('not_contacted')
-        if 'IsWatchlisted' in df.columns:
-            df['IsWatchlisted'] = df['IsWatchlisted'].fillna(0)
+        if 'contactstatus' in df.columns:
+            df['contactstatus'] = df['contactstatus'].fillna('not_contacted')
+        if 'iswatchlisted' in df.columns:
+            df['iswatchlisted'] = df['iswatchlisted'].fillna(0)
         
-        latest_data = df.sort_values('TaxYear', ascending=False).drop_duplicates(subset=['EIN'], keep='first')
+        latest_data = df.sort_values('taxyear', ascending=False).drop_duplicates(subset=['ein'], keep='first')
         
         st.sidebar.header("Filters")
         
@@ -266,29 +266,29 @@ def show_dashboard():
         
         status_options = ['not_contacted', 'called_no_answer', 'called_not_interested', 
                          'called_interested', 'meeting_scheduled', 'client']
-        if 'ContactStatus' in latest_data.columns:
+        if 'contactstatus' in latest_data.columns:
             selected_statuses = st.sidebar.multiselect(
                 "Contact Status", status_options, default=['not_contacted'],
                 help="Filter organizations by your contact status tracking"
             )
-            latest_data = latest_data[latest_data['ContactStatus'].isin(selected_statuses)]
+            latest_data = latest_data[latest_data['contactstatus'].isin(selected_statuses)]
         
         state_options = ['FL', 'NY']
         selected_states = st.sidebar.multiselect(
-            "State (FL/NY)", state_options, default=state_options,
+            "state (FL/NY)", state_options, default=state_options,
             help="Filter by state - Florida or New York"
         )
-        latest_data = latest_data[latest_data['State'].isin(selected_states)]
+        latest_data = latest_data[latest_data['state'].isin(selected_states)]
         
-        min_score = int(latest_data['LeadScore'].min()) if not latest_data['LeadScore'].isna().all() else 0
-        max_score = int(latest_data['LeadScore'].max()) if not latest_data['LeadScore'].isna().all() else 100
+        min_score = int(latest_data['leadscore'].min()) if not latest_data['leadscore'].isna().all() else 0
+        max_score = int(latest_data['leadscore'].max()) if not latest_data['leadscore'].isna().all() else 100
         min_lead_score = st.sidebar.slider(
             "Min Lead Score", 0, 100, min_score,
             help="Minimum composite score (0-100). Higher scores indicate better prospects based on financial health metrics."
         )
-        latest_data = latest_data[latest_data['LeadScore'] >= min_lead_score]
+        latest_data = latest_data[latest_data['leadscore'] >= min_lead_score]
         
-        if 'TotalAssetsEOY' in latest_data.columns:
+        if 'totalassetseoy' in latest_data.columns:
             min_assets = 1000000  # Always start at $1M
             max_assets = 50000000  # Max slider goes to $50M
             default_max = 10000000  # Default selection is $10M
@@ -307,50 +307,50 @@ def show_dashboard():
                 help="Filter by total assets at fiscal year end"
             )
         latest_data = latest_data[
-            (latest_data['TotalAssetsEOY'] >= asset_range[0]) & 
-            (latest_data['TotalAssetsEOY'] <= asset_range[1])
+            (latest_data['totalassetseoy'] >= asset_range[0]) & 
+            (latest_data['totalassetseoy'] <= asset_range[1])
         ]
     
     # Filter by Tax Year
-    tax_years = sorted(latest_data['TaxYear'].dropna().unique().tolist())
+    tax_years = sorted(latest_data['taxyear'].dropna().unique().tolist())
     if tax_years:
         selected_years = st.sidebar.multiselect(
             "Tax Year", tax_years, default=tax_years,
             help="Filter by IRS Form 990 filing year"
         )
-        latest_data = latest_data[latest_data['TaxYear'].isin(selected_years)]
+        latest_data = latest_data[latest_data['taxyear'].isin(selected_years)]
     
-    ntee_categories = latest_data['NTEECode'].dropna().unique().tolist()
+    ntee_categories = latest_data['nteecode'].dropna().unique().tolist()
     if ntee_categories:
         selected_ntee = st.sidebar.multiselect(
             "NTEE Category", ntee_categories, default=ntee_categories[:5],
             help="National Taxonomy of Exempt Entities code - categories like Arts, Education, Health, etc."
         )
-        latest_data = latest_data[latest_data['NTEECode'].isin(selected_ntee)]
+        latest_data = latest_data[latest_data['nteecode'].isin(selected_ntee)]
     
     min_program_ratio = st.sidebar.slider(
         "Min Program Expense Ratio", 0.0, 1.0, 0.0,
         help="Minimum percentage of expenses going to programs. 70%+ is excellent."
     )
-    if 'ProgramExpenseRatio' in latest_data.columns:
-        latest_data = latest_data[latest_data['ProgramExpenseRatio'] >= min_program_ratio]
+    if 'programexpenseratio' in latest_data.columns:
+        latest_data = latest_data[latest_data['programexpenseratio'] >= min_program_ratio]
     
     search_query = st.text_input("Search organizations", "")
     if search_query:
-        latest_data = latest_data[latest_data['OrgName'].str.contains(search_query, case=False, na=False)]
+        latest_data = latest_data[latest_data['orgname'].str.contains(search_query, case=False, na=False)]
     
     # Sort by year (newest first)
-    latest_data = latest_data.sort_values('TaxYear', ascending=False)
+    latest_data = latest_data.sort_values('taxyear', ascending=False)
     
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Quick Stats")
     st.sidebar.metric("Total Orgs", len(latest_data))
-    if not latest_data['LeadScore'].isna().all():
-        st.sidebar.metric("Avg Lead Score", f"{latest_data['LeadScore'].mean():.1f}")
-    if not latest_data['RevenueGrowthYoY'].isna().all():
-        st.sidebar.metric("Avg Revenue Growth", f"{latest_data['RevenueGrowthYoY'].mean()*100:.1f}%")
-    if not latest_data['ProgramExpenseRatio'].isna().all():
-        st.sidebar.metric("Avg Program Ratio", f"{latest_data['ProgramExpenseRatio'].mean()*100:.1f}%")
+    if not latest_data['leadscore'].isna().all():
+        st.sidebar.metric("Avg Lead Score", f"{latest_data['leadscore'].mean():.1f}")
+    if not latest_data['revenuegrowthyoy'].isna().all():
+        st.sidebar.metric("Avg Revenue Growth", f"{latest_data['revenuegrowthyoy'].mean()*100:.1f}%")
+    if not latest_data['programexpenseratio'].isna().all():
+        st.sidebar.metric("Avg Program Ratio", f"{latest_data['programexpenseratio'].mean()*100:.1f}%")
     
     st.markdown("### Key Metrics")
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -358,73 +358,73 @@ def show_dashboard():
     with col1:
         st.metric("Total Orgs", len(latest_data), help="Number of organizations matching current filters")
     with col2:
-        avg_score = latest_data['LeadScore'].mean() if not latest_data['LeadScore'].isna().all() else 0
+        avg_score = latest_data['leadscore'].mean() if not latest_data['leadscore'].isna().all() else 0
         st.metric("Avg Lead Score", f"{avg_score:.1f}", help="Composite score (0-100) based on revenue growth, program ratio, operating surplus, liability ratio, and executive compensation. Higher = better prospect.")
     with col3:
-        avg_growth = latest_data['RevenueGrowthYoY'].mean() if not latest_data['RevenueGrowthYoY'].isna().all() else 0
+        avg_growth = latest_data['revenuegrowthyoy'].mean() if not latest_data['revenuegrowthyoy'].isna().all() else 0
         st.metric("Avg Revenue Growth", f"{avg_growth*100:.1f}%", help="Year-over-year average revenue change. Positive = growing organizations")
     with col4:
-        avg_program = latest_data['ProgramExpenseRatio'].mean() if not latest_data['ProgramExpenseRatio'].isna().all() else 0
+        avg_program = latest_data['programexpenseratio'].mean() if not latest_data['programexpenseratio'].isna().all() else 0
         st.metric("Avg Program Ratio", f"{avg_program*100:.1f}%", help="Percentage of expenses going to programs. 70%+ = excellent, 50-70% = good, <50% = may indicate inefficiency")
     with col5:
-        total_revenue = latest_data['TotalRevenueCY'].sum() / 1e9 if not latest_data['TotalRevenueCY'].isna().all() else 0
+        total_revenue = latest_data['totalrevenuecy'].sum() / 1e9 if not latest_data['totalrevenuecy'].isna().all() else 0
         st.metric("Total Revenue", f"${total_revenue:.1f}B", help="Combined total revenue for all filtered organizations")
     
     st.markdown("### Additional Insights")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        pos_growth = len(latest_data[latest_data['RevenueGrowthYoY'] > 0]) if 'RevenueGrowthYoY' in latest_data.columns else 0
+        pos_growth = len(latest_data[latest_data['revenuegrowthyoy'] > 0]) if 'revenuegrowthyoy' in latest_data.columns else 0
         pct_pos = pos_growth / len(latest_data) * 100 if len(latest_data) > 0 else 0
         st.metric("Org w/ Positive Growth", f"{pct_pos:.0f}%", help="Percentage of organizations with positive year-over-year revenue growth")
     with col2:
-        pos_surplus = len(latest_data[latest_data['SurplusDeficitCY'] > 0]) if 'SurplusDeficitCY' in latest_data.columns else 0
+        pos_surplus = len(latest_data[latest_data['surplusdeficitcy'] > 0]) if 'surplusdeficitcy' in latest_data.columns else 0
         pct_surplus = pos_surplus / len(latest_data) * 100 if len(latest_data) > 0 else 0
         st.metric("Org w/ Operating Surplus", f"{pct_surplus:.0f}%", help="Percentage of organizations with more revenue than expenses (operating surplus)")
     with col3:
-        avg_admin = latest_data['AdminExpenseRatio'].mean() * 100 if not latest_data['AdminExpenseRatio'].isna().all() else 0
+        avg_admin = latest_data['adminexpenseratio'].mean() * 100 if not latest_data['adminexpenseratio'].isna().all() else 0
         st.metric("Avg Admin Ratio", f"{avg_admin:.1f}%", help="Percentage of expenses used for administrative costs. Lower is generally better.")
     with col4:
-        avg_exec = latest_data['ExecCompPercentOfRevenue'].mean() * 100 if not latest_data['ExecCompPercentOfRevenue'].isna().all() else 0
+        avg_exec = latest_data['execcomppercentofrevenue'].mean() * 100 if not latest_data['execcomppercentofrevenue'].isna().all() else 0
         st.metric("Avg Exec Comp %", f"{avg_exec:.1f}%", help="Executive compensation as percentage of revenue. Lower = more funds go to mission.")
     
     st.markdown("### Organization List")
     
-    display_cols = ['OrgName', 'Phone', 'City', 'State', 'TaxYear', 'TotalAssetsEOY', 'TotalRevenueCY', 
-                    'RevenueGrowthYoY', 'ProgramExpenseRatio', 'LeadScore']
+    display_cols = ['orgname', 'phone', 'city', 'state', 'taxyear', 'totalassetseoy', 'totalrevenuecy', 
+                    'revenuegrowthyoy', 'programexpenseratio', 'leadscore']
     
     display_df = latest_data[display_cols].copy()
     
-    display_df['Phone'] = display_df['Phone'].apply(
+    display_df['phone'] = display_df['phone'].apply(
         lambda x: x if pd.notna(x) else "N/A"
     )
-    display_df['TotalAssetsEOY'] = display_df['TotalAssetsEOY'].apply(
+    display_df['totalassetseoy'] = display_df['totalassetseoy'].apply(
         lambda x: f"${x/1000000:.1f}M" if pd.notna(x) else "N/A"
     )
-    display_df['TotalRevenueCY'] = display_df['TotalRevenueCY'].apply(
+    display_df['totalrevenuecy'] = display_df['totalrevenuecy'].apply(
         lambda x: f"${x/1000000:.1f}M" if pd.notna(x) else "N/A"
     )
-    display_df['RevenueGrowthYoY'] = display_df['RevenueGrowthYoY'].apply(
+    display_df['revenuegrowthyoy'] = display_df['revenuegrowthyoy'].apply(
         lambda x: f"{x*100:.1f}%" if pd.notna(x) else "N/A"
     )
-    display_df['ProgramExpenseRatio'] = display_df['ProgramExpenseRatio'].apply(
+    display_df['programexpenseratio'] = display_df['programexpenseratio'].apply(
         lambda x: f"{x*100:.1f}%" if pd.notna(x) else "N/A"
     )
-    display_df['LeadScore'] = display_df['LeadScore'].apply(
+    display_df['leadscore'] = display_df['leadscore'].apply(
         lambda x: f"{x:.1f}" if pd.notna(x) else "N/A"
     )
     
     display_df = display_df.rename(columns={
-        'OrgName': 'Organization',
-        'Phone': 'Phone',
-        'City': 'City',
-        'State': 'State',
-        'TaxYear': 'Year',
-        'TotalAssetsEOY': 'Assets',
-        'TotalRevenueCY': 'Revenue',
-        'RevenueGrowthYoY': 'Rev Growth',
-        'ProgramExpenseRatio': 'Program %',
-        'LeadScore': 'Score'
+        'orgname': 'Organization',
+        'phone': 'phone',
+        'city': 'city',
+        'state': 'state',
+        'taxyear': 'Year',
+        'totalassetseoy': 'Assets',
+        'totalrevenuecy': 'Revenue',
+        'revenuegrowthyoy': 'Rev Growth',
+        'programexpenseratio': 'Program %',
+        'leadscore': 'Score'
     })
     
     # Pagination controls with numbered buttons
@@ -464,11 +464,11 @@ def show_dashboard():
     # Render table with expandable rows
     for i, row in enumerate(paged_df.itertuples()):
         org_name = row.Organization
-        phone = row.Phone if hasattr(row, 'Phone') else ''
+        phone = row.phone if hasattr(row, 'phone') else ''
         year = row.Year if hasattr(row, 'Year') else ''
         with st.expander(f"📅 {year} | 📋 {org_name} | 📞 {phone}"):
             actual_idx = start_idx + i
-            ein = latest_data.iloc[actual_idx]['EIN']
+            ein = latest_data.iloc[actual_idx]['ein']
             
             # Load and display org details inline
             org_df, filings_df, metrics_df, exec_df, prospect_df = load_org_details(ein)
@@ -476,36 +476,36 @@ def show_dashboard():
             if not org_df.empty:
                 org = org_df.iloc[0]
                 
-                city = org.get('City') or 'N/A'
-                st.markdown(f"**EIN:** {org['EIN']} | **City:** {city} | **State:** {org['State']} | **NTEE:** {org['NTEECode'] or 'N/A'}")
+                city = org.get('city') or 'N/A'
+                st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['state']} | **NTEE:** {org['nteecode'] or 'N/A'}")
                 
-                if org.get('WebsiteUrl'):
-                    st.markdown(f"**Website:** [{org['WebsiteUrl']}]({org['WebsiteUrl']})")
+                if org.get('websiteurl'):
+                    st.markdown(f"**Website:** [{org['websiteurl']}]({org['websiteurl']})")
                 
-                if org.get('Phone'):
-                    st.markdown(f"**Phone:** {org['Phone']}")
+                if org.get('phone'):
+                    st.markdown(f"**phone:** {org['phone']}")
                 
-                if org.get('PrincipalOfficer'):
-                    st.markdown(f"**Principal Officer:** {org['PrincipalOfficer']}")
+                if org.get('principalofficer'):
+                    st.markdown(f"**Principal Officer:** {org['principalofficer']}")
                 
-                if org.get('MissionDescription'):
+                if org.get('missiondescription'):
                     st.markdown("### Mission")
-                    st.markdown(org['MissionDescription'])
+                    st.markdown(org['missiondescription'])
                 
                 if not filings_df.empty:
                     latest = filings_df.iloc[0]
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        assets = latest.get('TotalAssetsEOY') or 0
+                        assets = latest.get('totalassetseoy') or 0
                         st.metric("Assets", f"${assets/1000000:.1f}M")
                     with col2:
-                        revenue = latest.get('TotalRevenueCY') or 0
+                        revenue = latest.get('totalrevenuecy') or 0
                         st.metric("Revenue", f"${revenue/1000000:.1f}M")
                     with col3:
-                        expenses = latest.get('TotalExpensesCY') or 0
+                        expenses = latest.get('totalexpensescy') or 0
                         st.metric("Expenses", f"${expenses/1000000:.1f}M")
                     with col4:
-                        net = latest.get('NetAssetsEOY') or 0
+                        net = latest.get('netassetseoy') or 0
                         st.metric("Net Assets", f"${net/1000000:.1f}M")
     
     st.stop()  # Stop here - no redirect needed
@@ -538,23 +538,23 @@ def show_org_detail(ein):
             st.session_state.selected_ein = None
             st.rerun()
     
-    st.title(f"{org['LegalName'] or 'Unknown Organization'}")
+    st.title(f"{org['legalname'] or 'Unknown Organization'}")
     
-    city = org.get('City') or 'N/A'
-    st.markdown(f"**EIN:** {org['EIN']} | **City:** {city} | **State:** {org['State']} | **NTEE:** {org['NTEECode'] or 'N/A'}")
+    city = org.get('city') or 'N/A'
+    st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['state']} | **NTEE:** {org['nteecode'] or 'N/A'}")
     
-    if org.get('WebsiteUrl'):
-        st.markdown(f"**Website:** [{org['WebsiteUrl']}]({org['WebsiteUrl']})")
+    if org.get('websiteurl'):
+        st.markdown(f"**Website:** [{org['websiteurl']}]({org['websiteurl']})")
     
-    if org.get('Phone'):
-        st.markdown(f"**Phone:** {org['Phone']}")
+    if org.get('phone'):
+        st.markdown(f"**phone:** {org['phone']}")
     
-    if org.get('PrincipalOfficer'):
-        st.markdown(f"**Principal Officer:** {org['PrincipalOfficer']}")
+    if org.get('principalofficer'):
+        st.markdown(f"**Principal Officer:** {org['principalofficer']}")
     
-    if org.get('MissionDescription'):
+    if org.get('missiondescription'):
         st.markdown("### Mission")
-        st.markdown(org['MissionDescription'])
+        st.markdown(org['missiondescription'])
     
     st.markdown("---")
     st.markdown("### Financial Snapshot")
@@ -564,42 +564,42 @@ def show_org_detail(ein):
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            assets = latest.get('TotalAssetsEOY') or 0
+            assets = latest.get('totalassetseoy') or 0
             st.metric("Total Assets", f"${assets/1000000:.1f}M")
         with col2:
-            revenue = latest.get('TotalRevenueCY') or 0
+            revenue = latest.get('totalrevenuecy') or 0
             st.metric("Total Revenue", f"${revenue/1000000:.1f}M")
         with col3:
-            expenses = latest.get('TotalExpensesCY') or 0
+            expenses = latest.get('totalexpensescy') or 0
             st.metric("Total Expenses", f"${expenses/1000000:.1f}M")
         with col4:
-            net_assets = latest.get('NetAssetsEOY') or 0
+            net_assets = latest.get('netassetseoy') or 0
             st.metric("Net Assets", f"${net_assets/1000000:.1f}M")
     
     st.markdown("---")
     st.markdown("### 3-Year Trend")
     
     if not filings_df.empty:
-        trend_data = filings_df.sort_values('TaxYear')
+        trend_data = filings_df.sort_values('taxyear')
         
         import plotly.graph_objects as go
         
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=trend_data['TaxYear'], 
-            y=trend_data['TotalRevenueCY'] / 1000000,
+            x=trend_data['taxyear'], 
+            y=trend_data['totalrevenuecy'] / 1000000,
             mode='lines+markers',
             name='Revenue'
         ))
         fig.add_trace(go.Scatter(
-            x=trend_data['TaxYear'], 
-            y=trend_data['TotalExpensesCY'] / 1000000,
+            x=trend_data['taxyear'], 
+            y=trend_data['totalexpensescy'] / 1000000,
             mode='lines+markers',
             name='Expenses'
         ))
         fig.add_trace(go.Scatter(
-            x=trend_data['TaxYear'], 
-            y=trend_data['NetAssetsEOY'] / 1000000,
+            x=trend_data['taxyear'], 
+            y=trend_data['netassetseoy'] / 1000000,
             mode='lines+markers',
             name='Net Assets'
         ))
@@ -621,16 +621,16 @@ def show_org_detail(ein):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            program_pct = (latest_metrics.get('ProgramExpenseRatio') or 0) * 100
+            program_pct = (latest_metrics.get('programexpenseratio') or 0) * 100
             st.metric("Program %", f"{program_pct:.1f}%")
         with col2:
-            admin_pct = (latest_metrics.get('AdminExpenseRatio') or 0) * 100
+            admin_pct = (latest_metrics.get('adminexpenseratio') or 0) * 100
             st.metric("Admin %", f"{admin_pct:.1f}%")
         with col3:
             fund_pct = (latest_metrics.get('FundraisingExpenseRatio') or 0) * 100
             st.metric("Fundraising %", f"{fund_pct:.1f}%")
         with col4:
-            exec_pct = (latest_metrics.get('ExecCompPercentOfRevenue') or 0) * 100
+            exec_pct = (latest_metrics.get('execcomppercentofrevenue') or 0) * 100
             st.metric("Exec Comp %", f"{exec_pct:.1f}%")
     
     st.markdown("---")
@@ -642,7 +642,7 @@ def show_org_detail(ein):
         latest_filing = filings_df.iloc[0]
         latest_metrics = metrics_df.iloc[0]
         
-        if latest_filing.get('SurplusDeficitCY', 0) < 0:
+        if latest_filing.get('surplusdeficitcy', 0) < 0:
             risk_flags.append(("🔴", "Operating Deficit"))
         
         liability_ratio = latest_metrics.get('LiabilityToAssetRatio') or 0
@@ -653,7 +653,7 @@ def show_org_detail(ein):
         if contrib_dep > 0.8:
             risk_flags.append(("🟡", f"Contribution Dependency > 80% ({contrib_dep*100:.1f}%)"))
         
-        exec_pct = latest_metrics.get('ExecCompPercentOfRevenue') or 0
+        exec_pct = latest_metrics.get('execcomppercentofrevenue') or 0
         if exec_pct > 0.1:
             risk_flags.append(("🟡", f"Exec Comp > 10% of Revenue ({exec_pct*100:.1f}%)"))
         
@@ -670,9 +670,9 @@ def show_org_detail(ein):
     st.markdown("---")
     st.markdown("### — Sales Activity —")
     
-    current_status = prospect_df.iloc[0]['ContactStatus'] if not prospect_df.empty else 'not_contacted'
-    current_watchlisted = bool(prospect_df.iloc[0]['IsWatchlisted']) if not prospect_df.empty else False
-    current_notes = prospect_df.iloc[0]['PrivateNotes'] or '' if not prospect_df.empty else ''
+    current_status = prospect_df.iloc[0]['contactstatus'] if not prospect_df.empty else 'not_contacted'
+    current_watchlisted = bool(prospect_df.iloc[0]['iswatchlisted']) if not prospect_df.empty else False
+    current_notes = prospect_df.iloc[0]['privatenotes'] or '' if not prospect_df.empty else ''
     
     col1, col2 = st.columns([1, 1])
     with col1:
