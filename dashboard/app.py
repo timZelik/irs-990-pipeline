@@ -167,6 +167,8 @@ def show_dashboard():
     if 'TotalAssetsEOY' in latest_data.columns:
         min_assets = latest_data['TotalAssetsEOY'].min() if latest_data['TotalAssetsEOY'].notna().any() else 1000000
         max_assets = latest_data['TotalAssetsEOY'].max() if latest_data['TotalAssetsEOY'].notna().any() else 10000000
+        if min_assets == max_assets:
+            max_assets = min_assets + 1000000
         asset_range = st.sidebar.slider("Asset Range ($)", int(min_assets), int(max_assets), (int(min_assets), int(max_assets)))
         latest_data = latest_data[
             (latest_data['TotalAssetsEOY'] >= asset_range[0]) & 
