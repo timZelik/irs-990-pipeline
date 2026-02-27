@@ -2,25 +2,14 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import os
-import urllib.parse
 
 def get_db_connection():
     try:
         conn_str = st.secrets["database"]["url"]
-        # Parse the connection string and add sslmode
-        parsed = urllib.parse.urlparse(conn_str)
-        
-        # Build connection kwargs
-        kwargs = {
-            'host': parsed.hostname,
-            'port': parsed.port or 5432,
-            'database': parsed.path.lstrip('/'),
-            'user': parsed.username,
-            'password': parsed.password,
-            'sslmode': 'require'
-        }
-        
-        return psycopg2.connect(**kwargs)
+        # Add sslmode=require if not present
+        if 'sslmode' not in conn_str:
+            conn_str += '?sslmode=require' if '?' not in conn_str else '&sslmode=require'
+        return psycopg2.connect(conn_str)
     except Exception as e:
         st.error(f"Database connection error: {e}")
         return None
