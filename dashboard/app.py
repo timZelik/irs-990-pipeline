@@ -7,7 +7,8 @@ def get_db_connection():
     try:
         conn_str = st.secrets["database"]["url"]
         return psycopg2.connect(conn_str)
-    except:
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
         return None
 
 def get_connection():
