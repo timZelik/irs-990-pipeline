@@ -51,7 +51,7 @@ if not st.session_state['password_correct']:
     
     try:
         default_password = st.secrets.get("password", "")
-    except:
+    except Exception:
         default_password = ""
     
     with st.form("login_form"):
@@ -180,22 +180,25 @@ def load_org_details(ein):
     
     return org_df, filings_df, metrics_df, exec_df, prospect_df
 
+def get_supabase_client():
+    """Supabase client using dashboard secrets (for writes)."""
+    supabase_url = st.secrets["database"]["url"]
+    supabase_key = st.secrets["database"]["key"]
+    return create_client(supabase_url, supabase_key)
+
+
 def save_prospect_activity(ein, contact_status, is_watchlisted, notes):
-    conn = get_connection()
-    if conn is None:
-        return
-    
     try:
-        existing = conn.table("prospect_activity").select("*").eq("ein", ein).execute()
-        
+        client = get_supabase_client()
+        existing = client.table("prospect_activity").select("*").eq("ein", ein).execute()
         if existing.data:
-            conn.table("prospect_activity").update({
+            client.table("prospect_activity").update({
                 "contactstatus": contact_status,
                 "iswatchlisted": 1 if is_watchlisted else 0,
                 "privatenotes": notes
             }).eq("ein", ein).execute()
         else:
-            conn.table("prospect_activity").insert({
+            client.table("prospect_activity").insert({
                 "ein": ein,
                 "contactstatus": contact_status,
                 "iswatchlisted": 1 if is_watchlisted else 0,
@@ -315,28 +318,26 @@ def show_dashboard():
         )
         latest_data = latest_data[latest_data['leadscore'] >= min_lead_score]
         
+        min_assets = 1000000
+        max_assets = 50000000
+        default_max = 10000000
+        asset_range = (min_assets, default_max)
         if 'totalassetseoy' in latest_data.columns:
-            min_assets = 1000000  # Always start at $1M
-            max_assets = 50000000  # Max slider goes to $50M
-            default_max = 10000000  # Default selection is $10M
-            
-            # Custom styled label with formatted numbers
             st.sidebar.markdown(f"""
             <div style="color: #00C853; font-weight: bold; margin-bottom: -10px;">
                 Asset Range: ${min_assets:,.0f} - ${default_max:,.0f}
             </div>
             """, unsafe_allow_html=True)
-            
             asset_range = st.sidebar.slider(
                 "",
-                min_assets, max_assets, 
+                min_assets, max_assets,
                 (min_assets, default_max),
                 help="Filter by total assets at fiscal year end"
             )
-        latest_data = latest_data[
-            (latest_data['totalassetseoy'] >= asset_range[0]) & 
-            (latest_data['totalassetseoy'] <= asset_range[1])
-        ]
+            latest_data = latest_data[
+                (latest_data['totalassetseoy'] >= asset_range[0]) &
+                (latest_data['totalassetseoy'] <= asset_range[1])
+            ]
     
     # Filter by Tax Year
     tax_years = sorted(latest_data['taxyear'].dropna().unique().tolist())
@@ -443,10 +444,7 @@ def show_dashboard():
     
     display_df = display_df.rename(columns={
         'orgname': 'Organization',
-        'phone': 'phone',
         'principalofficer': 'PrincipalOfficer',
-        'city': 'city',
-        'state': 'state',
         'taxyear': 'Year',
         'totalassetseoy': 'Assets',
         'totalrevenuecy': 'Revenue',
@@ -511,7 +509,7 @@ def show_dashboard():
                 org = org_df.iloc[0]
                 
                 city = org.get('city') or 'N/A'
-                st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['state']} | **NTEE:** {org['nteecode'] or 'N/A'}")
+                st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org.get('state', 'N/A')} | **NTEE:** {org['nteecode'] or 'N/A'}")
                 
                 if org.get('websiteurl'):
                     st.markdown(f"**Website:** [{org['websiteurl']}]({org['websiteurl']})")
@@ -542,8 +540,6 @@ def show_dashboard():
                         net = latest.get('netassetseoy') or 0
                         st.metric("Net Assets", f"${net/1000000:.1f}M")
     
-    st.stop()  # Stop here - no redirect needed
-    
     col1, col2 = st.columns([1, 1])
     with col2:
         csv = display_df.to_csv(index=False)
@@ -553,6 +549,7 @@ def show_dashboard():
             file_name="prospects.csv",
             mime="text/csv"
         )
+    st.stop()
 
 def show_org_detail(ein):
     org_df, filings_df, metrics_df, exec_df, prospect_df = load_org_details(ein)
@@ -575,7 +572,7 @@ def show_org_detail(ein):
     st.title(f"{org['legalname'] or 'Unknown Organization'}")
     
     city = org.get('city') or 'N/A'
-    st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['State']} | **NTEE:** {org['nteecode'] or 'N/A'}")
+    st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org.get('state', org.get('State', 'N/A'))} | **NTEE:** {org['nteecode'] or 'N/A'}")
     
     if org.get('websiteurl'):
         st.markdown(f"**Website:** [{org['websiteurl']}]({org['websiteurl']})")

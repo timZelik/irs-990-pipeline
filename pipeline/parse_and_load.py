@@ -29,7 +29,7 @@ def get_text(elem, xpath_expr):
         if result:
             text = result[0].text
             return text.strip() if text else None
-    except:
+    except (AttributeError, IndexError, TypeError):
         pass
     return None
 

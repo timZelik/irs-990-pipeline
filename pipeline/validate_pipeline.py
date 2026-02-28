@@ -24,12 +24,11 @@ def count_db_records():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    tables = ['organizations', 'filings', 'executive_compensation', 'derived_metrics', 'prospect_activity']
+    allowed_tables = ('organizations', 'filings', 'executive_compensation', 'derived_metrics', 'prospect_activity')
     counts = {}
-    
-    for table in tables:
+    for table in allowed_tables:
         try:
-            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            cursor.execute("SELECT COUNT(*) FROM " + table)
             counts[table] = cursor.fetchone()[0]
         except sqlite3.OperationalError:
             counts[table] = 0

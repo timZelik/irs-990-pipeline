@@ -9,11 +9,12 @@ BMF_URLS = {
 }
 
 OUTPUT_PATH = 'data/target_eins.csv'
-os.makedirs('data', exist_ok=True)
+
 
 def download_bmf_and_filter():
+    os.makedirs('data', exist_ok=True)
     all_orgs = []
-    
+
     for state, url in BMF_URLS.items():
         print(f"Downloading BMF for {state} from {url}...")
         
