@@ -417,7 +417,7 @@ def show_dashboard():
     
     st.markdown("### Organization List")
     
-    display_cols = ['orgname', 'phone', 'city', 'state', 'taxyear', 'totalassetseoy', 'totalrevenuecy',
+    display_cols = ['orgname', 'phone', 'principalofficer', 'city', 'state', 'taxyear', 'totalassetseoy', 'totalrevenuecy',
                 'revenuegrowthyoy', 'programexpenseratio', 'leadscore']
     
     display_df = latest_data[display_cols].copy()
@@ -444,6 +444,7 @@ def show_dashboard():
     display_df = display_df.rename(columns={
         'orgname': 'Organization',
         'phone': 'phone',
+        'principalofficer': 'PrincipalOfficer',
         'city': 'city',
         'state': 'state',
         'taxyear': 'Year',
@@ -493,7 +494,13 @@ def show_dashboard():
         org_name = row.Organization
         phone = row.phone if hasattr(row, 'phone') else ''
         year = row.Year if hasattr(row, 'Year') else ''
-        with st.expander(f"📅 {year} | 📋 {org_name} | 📞 {phone}"):
+        principal_officer = row.PrincipalOfficer if hasattr(row, 'PrincipalOfficer') else ''
+        header = f"📅 {year} | 📋 {org_name}"
+        if phone:
+            header += f" | 📞 {phone}"
+        if principal_officer:
+            header += f" | 👤 {principal_officer}"
+        with st.expander(header):
             actual_idx = start_idx + i
             ein = latest_data.iloc[actual_idx]['ein']
             
