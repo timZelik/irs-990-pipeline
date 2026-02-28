@@ -3,42 +3,42 @@ import pandas as pd
 from supabase import create_client
 import os
 
-# Supabase client - will be initialized on first use
-supabase_client = None
-
-def get_db_connection():
-    global supabase_client
+@st.cache_data(ttl=3600)
+def fetch_table_cached(table_name, columns="*"):
     try:
-        if supabase_client is None:
-            supabase_url = st.secrets["database"]["url"]
-            supabase_key = st.secrets["database"]["key"]
-            supabase_client = create_client(supabase_url, supabase_key)
-        return supabase_client
-    except Exception as e:
-        st.error(f"Database connection error: {e}")
-        return None
-
-def get_connection():
-    conn = get_db_connection()
-    if conn is None:
-        st.error("Database connection failed. Please configure Streamlit secrets.")
-        st.stop()
-    return conn
-
-def fetch_table(table_name, columns="*"):
-    """Fetch data from a table"""
-    conn = get_connection()
-    if conn is None:
-        return pd.DataFrame()
-    
-    try:
-        response = conn.table(table_name).select(columns).execute()
-        if response.data:
-            return pd.DataFrame(response.data)
+        supabase_url = st.secrets["database"]["url"]
+        supabase_key = st.secrets["database"]["key"]
+        client = create_client(supabase_url, supabase_key)
+        
+        all_data = []
+        page = 0
+        page_size = 1000
+        
+        while True:
+            response = client.table(table_name).select(columns).range(page * page_size, (page + 1) * page_size - 1).execute()
+            if not response.data:
+                break
+            all_data.extend(response.data)
+            if len(response.data) < page_size:
+                break
+            page += 1
+        
+        if all_data:
+            df = pd.DataFrame(all_data)
+            df.columns = [c.lower() for c in df.columns]
+            if 'legalname' in df.columns:
+                df = df.rename(columns={'legalname': 'orgname'})
+            return df
         return pd.DataFrame()
     except Exception as e:
         st.error(f"Error fetching {table_name}: {e}")
         return pd.DataFrame()
+
+def fetch_table(table_name, columns="*"):
+    return fetch_table_cached(table_name, columns)
+
+def get_connection():
+    return None
 
 # Password protection - Python session only (resets when browser closes)
 
@@ -121,12 +121,25 @@ def load_summary_data():
     prospect = fetch_table("prospect_activity")
     
     # Merge data
-    df = orgs.merge(filings, on="ein", how="left", suffixes=('', '_fil'))
-    df = df.merge(metrics, on=["ein", "taxyear"], how="left", suffixes=('', '_met'))
-    df = df.merge(prospect, on="ein", how="left", suffixes=('', '_pros'))
+    if not orgs.empty:
+        df = orgs.copy()
+    else:
+        return pd.DataFrame()
+    
+    if not filings.empty and 'ein' in filings.columns:
+        df = df.merge(filings, on="ein", how="left", suffixes=('', '_fil'))
+    
+    if not metrics.empty and 'ein' in metrics.columns and 'taxyear' in metrics.columns:
+        df = df.merge(metrics, on=["ein", "taxyear"], how="left", suffixes=('', '_met'))
+    
+    if prospect is not None and not prospect.empty:
+        prospect_cols = prospect.columns.tolist()
+        if 'ein' in prospect_cols:
+            df = df.merge(prospect, on="ein", how="left", suffixes=('', '_pros'))
     
     # Sort by leadscore
-    df = df.sort_values('leadscore', ascending=False, na_position='last')
+    if 'leadscore' in df.columns:
+        df = df.sort_values('leadscore', ascending=False, na_position='last')
     
     return df
 
@@ -142,18 +155,28 @@ def load_org_details(ein):
     org_df = org_df[org_df['ein'] == ein]
     
     filings_df = fetch_table("filings", "*")
-    filings_df = filings_df[filings_df['ein'] == ein].sort_values('taxyear', ascending=False)
+    if not filings_df.empty and 'ein' in filings_df.columns:
+        filings_df = filings_df[filings_df['ein'] == ein].sort_values('taxyear', ascending=False)
+    else:
+        filings_df = pd.DataFrame()
     
     metrics_df = fetch_table("derived_metrics", "*")
-    metrics_df = metrics_df[metrics_df['ein'] == ein].sort_values('taxyear', ascending=False)
+    if not metrics_df.empty and 'ein' in metrics_df.columns:
+        metrics_df = metrics_df[metrics_df['ein'] == ein].sort_values('taxyear', ascending=False)
+    else:
+        metrics_df = pd.DataFrame()
     
     exec_df = fetch_table("executive_compensation", "*")
-    exec_df = exec_df[exec_df['ein'] == ein].sort_values('taxyear', ascending=False)
+    if not exec_df.empty and 'ein' in exec_df.columns:
+        exec_df = exec_df[exec_df['ein'] == ein].sort_values('taxyear', ascending=False)
+    else:
+        exec_df = pd.DataFrame()
     
     prospect_df = fetch_table("prospect_activity", "*")
-    prospect_df = prospect_df[prospect_df['ein'] == ein]
-    
-    conn.close()
+    if not prospect_df.empty and 'ein' in prospect_df.columns:
+        prospect_df = prospect_df[prospect_df['ein'] == ein]
+    else:
+        prospect_df = pd.DataFrame()
     
     return org_df, filings_df, metrics_df, exec_df, prospect_df
 
@@ -163,18 +186,15 @@ def save_prospect_activity(ein, contact_status, is_watchlisted, notes):
         return
     
     try:
-        # Check if record exists
         existing = conn.table("prospect_activity").select("*").eq("ein", ein).execute()
         
         if existing.data:
-            # Update
             conn.table("prospect_activity").update({
                 "contactstatus": contact_status,
                 "iswatchlisted": 1 if is_watchlisted else 0,
                 "privatenotes": notes
             }).eq("ein", ein).execute()
         else:
-            # Insert
             conn.table("prospect_activity").insert({
                 "ein": ein,
                 "contactstatus": contact_status,
@@ -397,8 +417,8 @@ def show_dashboard():
     
     st.markdown("### Organization List")
     
-    display_cols = ['orgname', 'phone', 'city', 'state', 'taxyear', 'totalassetseoy', 'totalrevenuecy', 
-                    'revenuegrowthyoy', 'programexpenseratio', 'leadscore']
+    display_cols = ['orgname', 'phone', 'city', 'state', 'taxyear', 'totalassetseoy', 'totalrevenuecy',
+                'revenuegrowthyoy', 'programexpenseratio', 'leadscore']
     
     display_df = latest_data[display_cols].copy()
     
