@@ -21,7 +21,6 @@ venv/
 *.swo
 
 # Streamlit
-.streamlit/
 .streamlit/secrets.toml  # Don't commit actual secrets
 streamlit.log
 
