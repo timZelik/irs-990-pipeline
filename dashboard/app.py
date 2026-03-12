@@ -6,8 +6,8 @@ import os
 @st.cache_data(ttl=3600)
 def fetch_table_cached(table_name, columns="*"):
     try:
-        supabase_url = st.secrets["database"]["url"]
-        supabase_key = st.secrets["database"]["key"]
+        supabase_url = st.secrets["SUPABASE_URL"]
+        supabase_key = st.secrets["SUPABASE_KEY"]
         client = create_client(supabase_url, supabase_key)
         
         all_data = []
