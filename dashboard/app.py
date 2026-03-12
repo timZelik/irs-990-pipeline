@@ -76,20 +76,10 @@ st.markdown("""
         background-color: #00C853 !important;
         color: #000 !important;
     }
-    
-    /* Default text - white */
-    .stApp, p, div, span, li, td, th, label {
-        color: #ffffff !important;
-    }
-    
+
     /* Metric values in quick stats - green */
     [data-testid="stMetricValue"] {
         color: #00C853 !important;
-    }
-    
-    /* Metric labels - white */
-    [data-testid="stMetricLabel"] {
-        color: #ffffff !important;
     }
 </style>
 """, unsafe_allow_html=True)
