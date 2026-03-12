@@ -3,6 +3,17 @@ import pandas as pd
 from supabase import create_client
 import os
 
+def normalize_url(url):
+    """Ensure a URL has a scheme so it renders as a proper hyperlink."""
+    if not url:
+        return None
+    url = url.strip()
+    if url.lower() in ('n/a', 'none', ''):
+        return None
+    if not url.lower().startswith(('http://', 'https://')):
+        url = 'https://' + url
+    return url
+
 @st.cache_data(ttl=3600)
 def fetch_table_cached(table_name, columns="*"):
     try:
@@ -503,12 +514,13 @@ def show_dashboard():
                 city = org.get('city') or 'N/A'
                 st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['state']} | **NTEE:** {org['nteecode'] or 'N/A'}")
                 
-                if org.get('websiteurl'):
-                    st.markdown(f"**Website:** [{org['websiteurl']}]({org['websiteurl']})")
-                
+                website = normalize_url(org.get('websiteurl'))
+                if website:
+                    st.markdown(f"**Website:** [{website}]({website})")
+
                 if org.get('phone'):
-                    st.markdown(f"**phone:** {org['phone']}")
-                
+                    st.markdown(f"**Phone:** {org['phone']}")
+
                 if org.get('principalofficer'):
                     st.markdown(f"**Principal Officer:** {org['principalofficer']}")
                 
@@ -567,12 +579,13 @@ def show_org_detail(ein):
     city = org.get('city') or 'N/A'
     st.markdown(f"**ein:** {org['ein']} | **city:** {city} | **state:** {org['State']} | **NTEE:** {org['nteecode'] or 'N/A'}")
     
-    if org.get('websiteurl'):
-        st.markdown(f"**Website:** [{org['websiteurl']}]({org['websiteurl']})")
-    
+    website = normalize_url(org.get('websiteurl'))
+    if website:
+        st.markdown(f"**Website:** [{website}]({website})")
+
     if org.get('phone'):
-        st.markdown(f"**phone:** {org['phone']}")
-    
+        st.markdown(f"**Phone:** {org['phone']}")
+
     if org.get('principalofficer'):
         st.markdown(f"**Principal Officer:** {org['principalofficer']}")
     
